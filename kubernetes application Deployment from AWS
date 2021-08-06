@@ -1,0 +1,50 @@
+kubernetes application Deployment from AWS
+
+pre-requisite:
+
+kubectl 
+AWS Cli
+AWS iam authenticator 
+eksctl
+
+1. checkout the azure code from the repo
+2. build the code using npm 
+3. run the test case and sonarqube quality 
+4. go to write the DockerFile
+
+5. docker build -t webapps .
+
+6. docker images --filter reference=webapp
+
+7. docker run -t -i -p 80:80 webapp
+
+8. Go to ECR -- > get Access Key and Secret for AWS CLI 
+
+aws ecr create-repository --repository-name webapp --region us-east-1
+aws ecr get-login-password --region us-east-1
+aws ecr --region us-east-1 | docker login -u AWS -p key
+docker tag webapp:latest ecr_image_url
+docker push  ecr_image_url
+
+9. Create VPC For EKS stack set (VPCblock, public subnet2 block , private subnet2 block, VPC, Internetgateway, attachment, security group, routing table, association, NatGateway, NatGatewayEIP, 2 private and public subnet, Output)
+
+aws cloudformation deploy --template-file amazon-eks-vpc-private-subnet.yaml --stack-name my-new-stack
+
+10. Create cluster( config nodegroup)
+eksctl create cluster -f cluster.yaml --kubeconfig=..\..\.kube\config
+
+kubectl apply -f deployment.yaml
+kubectl apply -f service.yaml
+
+kubectl get pod -o wide
+kubectl get node -o wide
+kubectl get services
+
+11. EC2 have 3 worker node running 
+
+open secuirty group ports for Nodeport
+
+
+
+
+
