@@ -12,33 +12,101 @@ eksctl
 3. run the test case and sonarqube quality 
 4. go to write the DockerFile
 
-5. docker build -t webapps .
 
-6. docker images --filter reference=webapp
+5. configure AWS -- > get Access Key and Secret for AWS CLI 
 
-7. docker run -t -i -p 80:80 webapp
+//aws ecr create-repository --repository-name webapp --region us-east-1
 
-8. Go to ECR -- > get Access Key and Secret for AWS CLI 
+//Retrieve the ECR auth token
+6.aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 889166750058.dkr.ecr.us-east-1.amazonaws.com
+//https://docs.aws.amazon.com/AmazonECS/latest/developerguide/docker-basics.html
+7.docker build -t k8s-poc .
+docker tag k8s-poc:latest 889166750058.dkr.ecr.us-east-1.amazonaws.com/k8s-poc:latest
+8.docker push 889166750058.dkr.ecr.us-east-1.amazonaws.com/k8s-poc:latest
 
-aws ecr create-repository --repository-name webapp --region us-east-1
-aws ecr get-login-password --region us-east-1
-aws ecr --region us-east-1 | docker login -u AWS -p key
-docker tag webapp:latest ecr_image_url
-docker push  ecr_image_url
 
-9. Create VPC For EKS stack set (VPCblock, public subnet2 block , private subnet2 block, VPC, Internetgateway, attachment, security group, routing table, association, NatGateway, NatGatewayEIP, 2 private and public subnet, Output)
+9. if not , can do following steps
 
+Create VPC For EKS stack set (VPCblock, public subnet2 block , private subnet2 block, VPC, Internetgateway, attachment, security group, routing table, association, NatGateway, NatGatewayEIP, 2 private and public subnet, Output)
 aws cloudformation deploy --template-file amazon-eks-vpc-private-subnet.yaml --stack-name my-new-stack
 
-10. Create cluster( config nodegroup)
+10. Create/connect cluster( config nodegroup)
 eksctl create cluster -f cluster.yaml --kubeconfig=..\..\.kube\config
 
-kubectl apply -f deployment.yaml
-kubectl apply -f service.yaml
+/*
+stage('Create') {
+      when {
+        expression { params.action == 'create' }
+      }
+      steps {
+        script {
+          input "Create EKS cluster ${params.cluster} in aws?" 
 
-kubectl get pod -o wide
-kubectl get node -o wide
-kubectl get services
+          withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', 
+          credentialsId: params.credential, 
+          accessKeyVariable: 'AWS_ACCESS_KEY_ID',  
+          secretKeyVariable: 'AWS_SECRET_ACCESS_KEY']]) {
+            
+            ca_args=""
+
+            if (params.ca == true) {
+                ca_args="--asg-access" 
+            }
+
+            sh """
+              ./eksctl create cluster \
+                --name ${params.cluster} \
+                --version ${params.k8s_version} \
+                --region  ${params.region} \
+                --nodegroup-name ${params.cluster}-0 \
+                --nodes ${params.num_workers} \
+                --nodes-min ${params.num_workers} \
+                --nodes-max ${params.max_workers} \
+                --node-type ${params.instance_type} \
+                --with-oidc \
+                --ssh-access \
+                ${ca_args} \
+                --ssh-public-key ${params.key_pair} \
+                --managed
+            """
+
+            // Oddly there isn't a eksctl arg to enable cw logs, although it can be passed as config.
+            if (params.cw_logs == true) {
+              echo "Setting up Cloudwatch logs."
+              sh """
+                ./eksctl utils update-cluster-logging --enable-types all --approve --cluster ${params.cluster}
+              """
+            }
+          }
+        }
+      }
+    }
+    */
+    
+aws eks --region us-east-1 update-kubeconfig --name "dev-blue-eks-cluster"
+
+
+11. //create namespace
+def createNamespace (namespace) {
+    echo "Creating namespace ${namespace} if needed"
+
+    sh "[ ! -z \"\$(kubectl get ns ${namespace} -o name 2>/dev/null)\" ] || kubectl create ns ${namespace}"
+}
+
+12. //deployment 
+helm upgrade --install --namespace ${namespace} . 
+
+13. // if exist, delete using below,
+
+def helmDelete (namespace, release) {
+    echo "Deleting ${release} in ${namespace} if deployed"
+
+    script {
+        release = "${release}-${namespace}"
+        sh "[ -z \"\$(helm ls --short ${release} 2>/dev/null)\" ] || helm delete --purge ${release}"
+    }
+}
+
 
 11. EC2 have 3 worker node running 
 
